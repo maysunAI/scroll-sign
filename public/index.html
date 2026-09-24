@@ -1,0 +1,1262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Scroll Sign</title>
+<meta name="description" content="Turn your phone into a scrolling text sign. Any size, any color, portrait or landscape.">
+<meta name="theme-color" content="#f6f5f2">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- req212: iOS Safari has no real Fullscreen API for arbitrary elements — these two
+     meta tags are what actually gets a chrome-less look on iPhone, but only once the
+     page is added to the Home Screen and reopened from there (not from a regular
+     Safari tab, which always keeps its browser chrome no matter what). -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root {
+    color-scheme: light;
+    --bg-page:#f6f5f2;
+    --card:#ffffff;
+    --border:#e6e3dd;
+    --text:#1c1c1c;
+    --sub:#8a8577;
+    --accent:#ff3b3b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg-page);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ── display mode (fullscreen sign) — stays dark-canvas by default, user picks bg/fg ── */
+  #display {
+    position: fixed; inset: 0;
+    background: var(--bg, #000);
+    overflow: hidden;
+    touch-action: none; /* req212: stops the browser's native pinch-page-zoom from
+      fighting with our own two-finger pinch-to-resize-text gesture below */
+  }
+  #display.hidden { display: none; }
+  #track {
+    position: absolute;
+    white-space: nowrap;
+    will-change: transform;
+    font-weight: 700;
+    line-height: 1; /* keeps the rendered line close to the actual font-size, req199 "fill the screen, no gap" */
+    color: var(--fg, #ffc107);
+  }
+  /* req199: an uploaded picture now renders INLINE inside the scrolling text itself
+     (wherever the 🖼️ marker sits in your message) instead of bouncing separately */
+  .track-img { height: 1em; width: auto; vertical-align: -0.15em; display: inline-block; border-radius: 0.08em; }
+  /* rainbow = a flowing gradient across the text (each character a different hue),
+     not the whole line fading as one color — req168 clarified "per-character" rainbow */
+  @keyframes rainbowFlow { from { background-position: 0% 0; } to { background-position: 200% 0; } }
+  #track.rainbow, #previewTrack.rainbow {
+    background-image: linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #32ade6, #5856d6, #af52de, #ff3b30);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent;
+    animation: rainbowFlow 3s linear infinite;
+  }
+
+  .emoji-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+  .emoji-picker button {
+    width: 34px; height: 34px; font-size: 1.15em; border-radius: 8px;
+    border: 1px solid var(--border); background: #fafaf8; cursor: pointer; padding: 0;
+  }
+  .emoji-picker button.active { background: var(--accent); border-color: var(--accent); }
+
+  #tapHint {
+    position: fixed; bottom: 14px; left: 0; right: 0;
+    text-align: center; font-size: 12px; color: #999;
+    pointer-events: none;
+  }
+  #exitBtn, #pauseBtn {
+    position: fixed; top: 12px; width: 34px; height: 34px;
+    border-radius: 50%; border: none; background: rgba(255,255,255,0.15);
+    color: #fff; font-size: 16px; cursor: pointer; line-height: 1;
+  }
+  #exitBtn { right: 12px; }
+  #pauseBtn { right: 54px; }
+
+  /* ── settings panel (light, compact) ───────────────────────── */
+  #settings {
+    position: fixed; inset: 0; background: var(--bg-page); overflow-y: auto;
+    padding: 18px 16px 90px;
+  }
+  #settings.hidden { display: none; }
+  #settings h1 { font-size: 1.2em; margin: 0 0 3px; }
+  #settings .sub { color: var(--sub); font-size: 0.82em; margin: 0 0 16px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 4px; margin-bottom: 12px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 0.8em; color: var(--sub); margin-bottom: 5px; }
+  .field textarea {
+    width: 100%; min-height: 70px; background: #fafaf8; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 0.95em; padding: 9px 10px; resize: vertical;
+  }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  input[type="color"] {
+    width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 7px;
+    background: #fafaf8; padding: 2px;
+  }
+  select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+    background: #fafaf8; color: var(--text); font-size: 0.92em;
+  }
+  .value-tag { color: var(--accent); font-size: 0.8em; }
+  .toggle-row { display: flex; gap: 8px; }
+  .toggle-row button {
+    flex: 1; padding: 8px; border-radius: 7px; border: 1px solid var(--border);
+    background: #fafaf8; color: var(--sub); font-size: 0.85em; cursor: pointer;
+  }
+  .toggle-row button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* mobile req (2026-09-23): numbered-boxes strip so the multi-phone card shows which
+     position/of-how-many is currently set, instead of just two bare number inputs */
+  #multiPreviewGrid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+  #multiPreviewGrid .phoneBox {
+    width: 34px; height: 34px; border-radius: 7px; border: 1px solid var(--border);
+    background: #fafaf8; color: var(--sub); font-size: 0.85em; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #multiPreviewGrid .phoneBox.me { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* req212: single 4-way picker replacing the old separate axis+direction toggles —
+     "which edge does the text start from / which way does it travel" in one control */
+  .dir-grid {
+    display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px);
+    grid-template-areas: ". up ." "left mid right" ". down .";
+    gap: 6px; margin-top: 4px;
+  }
+  .dir-grid button {
+    border-radius: 8px; border: 1px solid var(--border); background: #fafaf8;
+    font-size: 1.2em; cursor: pointer; color: var(--sub);
+  }
+  .dir-grid button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #dirUp { grid-area: up; } #dirLeft { grid-area: left; } #dirRight { grid-area: right; } #dirDown { grid-area: down; }
+  .dir-mid { grid-area: mid; display: flex; align-items: center; justify-content: center; font-size: 1.3em; color: var(--sub); }
+
+  /* pj87 task (corrected per user feedback): "text direction" is ONE button that cycles
+     through its 4 states on each click, not a 4-button grid like the entry-direction picker. */
+  #layoutBtn, #rotateBtn {
+    width: 48px; height: 48px; margin-top: 4px; border-radius: 8px; border: 1px solid var(--border);
+    background: #fafaf8; color: var(--text); font-size: 1.4em; cursor: pointer; line-height: 1.1;
+    white-space: pre-line; text-align: center;
+  }
+  #rotateBtn { font-size: 1.6em; white-space: normal; }
+
+  /* pj87 task: the three direction controls sit in one row below the preview, each with
+     a small label underneath (fits mobile width: 144+48+48px + gaps). */
+  .dir-row { display: flex; gap: 14px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .dir-row-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .dir-row-label { font-size: 0.72em; color: var(--sub); }
+
+  /* ── live preview strip — width/height set directly by JS (applyPreviewAspectRatio)
+     to match the CURRENT live viewport shape (same shape the real fullscreen display
+     would use right now). NOT done via CSS aspect-ratio + max-height: on a block-level
+     box with width:100%, the browser derives height from the full container width
+     first and only THEN clamps it to max-height — for a portrait (tall) ratio this
+     silently produces a short landscape-looking box regardless of the real ratio, which
+     is exactly the bug a user caught (req300: preview always looked landscape even
+     though the phone was held portrait). JS now computes an explicit contain-fit
+     width+height instead, so this is just a fallback before JS runs. */
+  #previewBox {
+    background: #111; border-radius: 10px; overflow: hidden;
+    max-width: 100%; max-height: 200px; margin: 0 auto 4px;
+    display: flex; align-items: center; position: relative;
+  }
+  #previewTrack { position: absolute; white-space: nowrap; will-change: transform; font-weight: 700; line-height: 1; }
+  #previewLabel { font-size: 0.72em; color: var(--sub); margin: 0 0 6px; }
+
+  #multiBox h2 { font-size: 0.95em; margin: 0 0 3px; }
+  #multiBox .sub { margin: 0 0 12px; color: var(--sub); font-size: 0.8em; line-height: 1.6; }
+  #syncStatus { font-size: 0.82em; color: #2a7a2a; margin: 6px 0 10px; min-height: 1.2em; }
+  .num-input {
+    width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: #fafaf8; color: var(--text);
+  }
+  /* pj87 task: "1/4" style position display — two number inputs with a slash between them
+     on one line, instead of two separate labeled fields side by side. */
+  .multi-pos-row { display: flex; align-items: center; gap: 8px; }
+  .multi-pos-row .num-input { width: 70px; text-align: center; }
+  .multi-slash { font-size: 1.3em; color: var(--sub); }
+
+  #startBtn {
+    position: fixed; left: 16px; right: 16px; bottom: 16px;
+    padding: 13px; font-size: 1em; font-weight: 700; border: none;
+    border-radius: 11px; background: var(--accent); color: #fff; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(255,59,59,0.35);
+  }
+
+  #stopHint {
+    position: fixed; top: 14px; left: 0; right: 0; text-align: center;
+    font-size: 12px; color: #999; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ Settings screen ══ -->
+<!-- pj87 task: screen simplified — preview moved to the very top, secondary info
+     (build/update/cache-warning) tucked behind the ℹ️ toggle, install moved to the end. -->
+<div id="settings">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <h1 style="margin:0;">📜 Scroll Sign</h1>
+    <span>
+      <span id="resetBtn" style="font-size:0.85em;color:var(--sub);cursor:pointer;user-select:none;margin-right:12px;">↺ Restore defaults</span>
+      <span id="infoToggle" style="font-size:0.85em;color:var(--sub);cursor:pointer;user-select:none;">ℹ️ info</span>
+    </span>
+  </div>
+  <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
+
+  <div id="infoPanel" class="card" style="display:none;">
+    <p class="sub" style="margin:0 0 6px;">build v18 &nbsp;
+      <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
+    <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v18" above, you're on
+      an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
+      link in a Private/Incognito tab (that never has an old cached version installed).</p>
+  </div>
+
+  <div class="card">
+    <p id="previewLabel">Preview</p>
+    <div id="previewBox"><div id="previewTrack"></div></div>
+
+    <!-- pj87 task: entry direction / rotation / character order moved up here, right
+         below the preview, in one row (fits mobile width: 144px dir-grid + two 48px
+         buttons + gaps ≈ 260px) — these three controls change what the preview shows,
+         so they belong next to it, not buried lower in a separate card. -->
+    <div class="dir-row">
+      <div class="dir-row-item">
+        <div class="dir-grid">
+          <button id="dirUp" type="button">↓</button>
+          <button id="dirLeft" type="button" class="active">→</button>
+          <div class="dir-mid">▤</div>
+          <button id="dirRight" type="button">←</button>
+          <button id="dirDown" type="button">↑</button>
+        </div>
+        <span class="dir-row-label">Entry</span>
+      </div>
+      <div class="dir-row-item">
+        <button id="rotateBtn" type="button">→</button>
+        <span class="dir-row-label">Rotate</span>
+      </div>
+      <div class="dir-row-item">
+        <button id="layoutBtn" type="button">AB</button>
+        <span class="dir-row-label">Order</span>
+      </div>
+    </div>
+    <p class="sub" id="dirInfoToggle" style="margin:6px 0 0;cursor:pointer;color:var(--accent);">ⓘ What do these mean?</p>
+    <div id="dirInfo" style="display:none;">
+      <p class="sub" style="margin:6px 0 0;"><b>Entry</b> — pick the edge your text enters from (arrow
+        points the way it travels). Defaults to entering from the left, travelling right — the most
+        common way to use this as a sign.</p>
+      <p class="sub" style="margin:6px 0 0;"><b>Rotate</b> — which way the text itself faces: → upright
+        (0°) · ↓ rotated 90° · ← upside down (180°) · ↑ rotated 270°. Independent of Entry and Order —
+        this rotates the text itself, not which way it scrolls or which order the characters read in.</p>
+      <p class="sub" style="margin:6px 0 0;"><b>Order</b> — reading order for short text (e.g. 2
+        characters): AB normal order · A/B stacked top-to-bottom · BA reversed order · B/A stacked
+        bottom-to-top, tap again to cycle back to AB. Independent of Entry — e.g. stacked characters
+        can still travel left to right as one column.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <label>Text (any language — English, 日本語, 中文, 한국어…)</label>
+      <textarea id="txt" placeholder="Type your message...">你好 Hello</textarea>
+    </div>
+
+    <div class="field" style="margin-top:-6px;">
+      <label>Emoji / picture — tap to insert into your text above (mixed in with the words, not a separate animation)</label>
+      <div class="emoji-picker" id="emojiPicker"></div>
+      <input type="file" id="mascotImageFile" accept="image/*" style="width:100%;font-size:0.82em;margin-top:8px;">
+      <p class="sub" id="mascotImageStatus" style="margin:6px 0 0;display:none;">
+        Picture inserted · <a href="#" id="mascotImageClear" style="color:var(--accent);">remove picture</a>
+      </p>
+    </div>
+
+    <div class="field">
+      <label>Font</label>
+      <select id="font">
+        <option value="-apple-system, 'Segoe UI', Roboto, sans-serif">Default (sans-serif)</option>
+        <option value="Georgia, 'Times New Roman', serif">Serif</option>
+        <option value="'Courier New', Consolas, monospace">Monospace</option>
+        <option value="Impact, 'Arial Narrow', sans-serif">Condensed / bold sign</option>
+        <option value="'Comic Sans MS', cursive">Casual</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Font size <span class="value-tag" id="sizeVal"></span> (defaults to fill the screen)</label>
+        <input type="range" id="size" min="20" max="1200" value="72">
+      </div>
+      <div class="field">
+        <label>Speed <span class="value-tag" id="speedVal"></span></label>
+        <input type="range" id="speed" min="1" max="10" value="5">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Text color</label>
+        <input type="color" id="fg" value="#ffc107">
+      </div>
+      <div class="field">
+        <label>Background color</label>
+        <input type="color" id="bg" value="#000000">
+      </div>
+    </div>
+
+    <div class="field">
+      <label><input type="checkbox" id="rainbow"> 🌈 Rainbow (each character a different color, flowing)</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="multiBox">
+      <h2>🔗 Multi-phone combo display
+        <span id="multiInfoToggle" style="font-size:0.6em;color:var(--accent);font-weight:400;cursor:pointer;vertical-align:middle;">ⓘ how does this work?</span>
+      </h2>
+      <p class="sub" id="multiInfo" style="display:none;">
+        Line up several phones side by side (any mix of Android/iPhone — this uses
+        each phone's own clock, not an app-specific protocol). Each phone shows the
+        SAME message, but starts its scroll at a synced clock time with a per-device
+        offset — when phones are the same width and placed in order, the moving line
+        looks continuous across screens. Best-effort sync only (no server): works
+        well on the same wifi/time zone, can drift a little over long sessions —
+        tap "Start display" again on all phones to realign anytime. Font size
+        automatically multiplies by "Total phones" — with 4 phones, the text renders
+        4× bigger than the "Font size" slider says, so one giant character spans
+        across all 4 screens together instead of each phone showing its own small copy.
+      </p>
+      <div class="field">
+        <label>This phone's position / total phones (e.g. "1 / 4" = leftmost of 4)</label>
+        <div class="multi-pos-row">
+          <input type="number" id="devIndex" min="1" value="1" class="num-input">
+          <span class="multi-slash">/</span>
+          <input type="number" id="devTotal" min="1" value="1" class="num-input">
+        </div>
+        <div id="multiPreviewGrid"></div>
+      </div>
+      <div class="field">
+        <label>Manual fine-tune (ms) <span class="value-tag" id="offsetVal">0ms</span></label>
+        <input type="range" id="syncOffset" min="-1000" max="1000" value="0" step="10">
+        <p class="sub" style="margin:6px 0 0;">
+          If this phone still looks slightly ahead/behind the others after starting,
+          nudge it here (negative = start a bit earlier, positive = start a bit later)
+          and tap "Start display" again.
+        </p>
+      </div>
+      <div id="syncStatus"></div>
+    </div>
+  </div>
+
+  <!-- mobile req 2026-09-23 round16 ("plan A"): real auto-sync via this project's own
+       WebSocket signaling server, on top of (not replacing) the manual clock-guess
+       fallback above. -->
+  <div class="card">
+    <h2 style="font-size:1em;margin:0 0 4px;">🎮 Live Control (auto-sync, beta)
+      <span id="liveInfoToggle" style="font-size:0.6em;color:var(--accent);font-weight:400;cursor:pointer;vertical-align:middle;">ⓘ how does this work?</span>
+    </h2>
+    <p class="sub" id="liveInfo" style="display:none;">
+      One phone becomes the Controller and gets a 4-digit room code. Every other phone
+      joins that code as a Display. The Controller pushes the message/look to all joined
+      phones and starts them together — the start moment comes from the server's own
+      clock (not each phone guessing), so this is tighter sync than the manual
+      position/offset fallback above. Needs internet access (not just the same wifi) —
+      this talks to sign.maysuns.uk's own small control server. The inline picture
+      (🖼️) is NOT sent to other phones — only text, size, speed, colors, font, rainbow,
+      direction, and rotation.
+    </p>
+    <div class="toggle-row">
+      <button id="liveBecomeControlBtn" type="button">🎮 Become Controller</button>
+      <button id="liveJoinDisplayBtn" type="button">📱 Join as Display</button>
+    </div>
+
+    <div id="liveControlPanel" style="display:none;margin-top:10px;">
+      <p class="sub" style="margin:0 0 4px;">Room code — have every other phone tap "Join as Display" and enter this:</p>
+      <p style="font-size:2.2em;font-weight:800;letter-spacing:0.1em;margin:0 0 8px;" id="liveRoomCode">····</p>
+      <div id="liveDeviceGrid" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <p class="sub" id="liveControlStatus" style="margin:8px 0;"></p>
+      <button id="livePushStartBtn" type="button" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;">📡 Push settings + Start all</button>
+    </div>
+
+    <div id="liveDisplayPanel" style="display:none;margin-top:10px;">
+      <div class="field">
+        <label>Room code (ask the Controller phone for it)</label>
+        <input type="text" id="liveRoomInput" inputmode="numeric" maxlength="4" placeholder="e.g. 4720" class="num-input" style="width:100%;">
+      </div>
+      <button id="liveJoinSubmitBtn" type="button" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;">Join</button>
+      <p class="sub" id="liveDisplayStatus" style="margin:8px 0 0;"></p>
+    </div>
+  </div>
+
+  <!-- pj87 task: install moved to the very end — not needed until everything else is set up -->
+  <div class="card">
+    <p class="sub" style="margin:0 0 8px;">
+      <button id="installBtn" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:7px;padding:6px 12px;font-weight:700;cursor:pointer;">📲 Install this app</button>
+      <span id="installHelpToggle" style="color:var(--accent);font-weight:600;cursor:pointer;">📲 How to install / add to home screen</span>
+    </p>
+    <div id="installHelp" style="display:none;">
+      <p class="sub" style="margin:0 0 6px;"><b>Android (Chrome/Edge):</b> tap "📲 Install this app" above
+        if it's showing — if not: tap the ⋮ menu (top right) → "Install app" / "Add to Home screen".</p>
+      <p class="sub" style="margin:0;"><b>iPhone/iPad (Safari):</b> Apple doesn't let websites trigger this
+        automatically, so it's a few manual taps: 1) tap the Share icon (square with an arrow, in the
+        bottom/top toolbar) 2) scroll down and tap "Add to Home Screen" 3) tap "Add" — an app icon appears
+        on your home screen that opens straight to the display, no browser bar.
+        <b>This is also the only way to get a real fullscreen look on iPhone</b> — opening this page in a
+        normal Safari tab and tapping "Start display" will NOT hide Safari's browser bar (Apple doesn't
+        allow websites to request that); only the installed home-screen app version does.</p>
+    </div>
+    <p class="sub" id="iosFullscreenTip" style="display:none;color:#a35b00;font-weight:600;margin:8px 0 0;">
+      📱 iPhone tip: for a real fullscreen sign (no Safari address bar), add this to your Home Screen first
+      — see "How to install" above — then open it from the home screen icon instead of this browser tab.
+    </p>
+    <p class="sub" style="margin:10px 0 0;">
+      <a href="https://buy.stripe.com/test_bJe00c8Y061i7EB11d7kc0j" target="_blank" rel="noopener" style="color:var(--sub);text-decoration:underline;">☕ Support this project</a>
+    </p>
+  </div>
+
+  <button id="startBtn">▶ Start display</button>
+</div>
+
+<!-- ══ Display screen ══ -->
+<div id="display" class="hidden">
+  <div id="track"><span id="trackText"></span></div>
+  <button id="pauseBtn" style="display:none;">⏸</button>
+  <button id="exitBtn" style="display:none;">✕</button>
+</div>
+<p id="tapHint" style="display:none;">tap ⏸ to pause/resume · ✕ to edit</p>
+
+<script>
+const $ = id => document.getElementById(id);
+const settings = $('settings'), display = $('display');
+const track = $('track'), trackText = $('trackText'), tapHint = $('tapHint');
+const previewBox = $('previewBox'), previewTrack = $('previewTrack');
+
+// req212 real-device report: Android went fullscreen correctly, iPhone 15 Pro did not —
+// expected (Safari has no Fullscreen API for arbitrary elements), so surface a concrete
+// tip instead of just silently falling back.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+if (isIOS && !isStandalone) { $('iosFullscreenTip').style.display = 'block'; }
+
+$('infoToggle').onclick = () => {
+  const el = $('infoPanel');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+// req300 real bug fix: setting only `aspectRatio` in CSS while the box was width:100%
+// looked correct in the style panel but didn't actually render correctly — on a
+// block-level box, the browser sizes width from the full container FIRST, derives
+// height from that via the ratio, and only THEN clamps to max-height. For a portrait
+// (tall) ratio that clamp silently produced a short landscape-looking box no matter
+// what the real ratio was — this is why the preview always looked landscape even when
+// the phone was actually portrait, despite `previewBox.style.aspectRatio` holding the
+// right value the whole time. Fix: compute an explicit pixel width+height ourselves
+// (a manual "contain fit" of the live viewport shape into the available card width and
+// a max height budget) and set both directly, so the rendered box is truly the right
+// shape instead of just having the right aspect-ratio property ignored by the layout.
+function applyPreviewAspectRatio(){
+  const w = window.innerWidth, h = window.innerHeight;
+  if (w <= 0 || h <= 0) return;
+  const maxBoxHeight = 200; // keep in sync with #previewBox's CSS max-height
+  const availWidth = previewBox.parentElement.clientWidth;
+  const scale = Math.min(availWidth / w, maxBoxHeight / h);
+  previewBox.style.width = Math.round(w * scale) + 'px';
+  previewBox.style.height = Math.round(h * scale) + 'px';
+}
+applyPreviewAspectRatio();
+
+$('dirInfoToggle').onclick = () => {
+  const el = $('dirInfo');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+$('multiInfoToggle').onclick = () => {
+  const el = $('multiInfo');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+// pj87 task: "which edge does it enter from" is the primary metaphor now, so each button's
+// arrow points INWARD (the way the text travels once it's on screen) instead of outward —
+// dirUp (positioned at the top) now means "enters from the top, travels down", etc.
+let dir = 'ltr';
+let axis = 'h';   // 'h' = horizontal marquee, 'v' = vertical crawl
+const DIR_BUTTONS = {
+  left:   { axis: 'h', dir: 'ltr', el: 'dirLeft' },   // enters left, travels right (default)
+  right:  { axis: 'h', dir: 'rtl', el: 'dirRight' },  // enters right, travels left
+  top:    { axis: 'v', dir: 'ltr', el: 'dirUp' },     // enters top, travels down
+  bottom: { axis: 'v', dir: 'rtl', el: 'dirDown' },   // enters bottom, travels up
+};
+function setDirection(key){
+  const d = DIR_BUTTONS[key];
+  axis = d.axis; dir = d.dir;
+  Object.values(DIR_BUTTONS).forEach(o => $(o.el).classList.toggle('active', o === d));
+  updatePreview();
+}
+Object.keys(DIR_BUTTONS).forEach(key => { $(DIR_BUTTONS[key].el).onclick = () => setDirection(key); });
+
+// pj87 task (corrected per user feedback — one arrow button that cycles on click, not a
+// 4-button grid): "text direction" replaces the old 2-state Horizontal/Vertical toggle.
+// Cycle order mimics a clockwise turn: → "AB" → ↓ "A/B" → ← "BA" → ↑ "B/A" → back to →.
+// pj87 task: button glyphs show the actual letters ("AB"/"BA") instead of arrows —
+// user feedback: an arrow alone didn't make it obvious the button changes reading
+// order, seeing "AB" turn into "BA" does. Vertical states use a real line break
+// (button CSS has white-space:pre-line) so "A\nB" renders as A stacked over B.
+const LAYOUT_STATES = [
+  { mode: 'h-ltr', glyph: 'AB' },   // normal order (default)
+  { mode: 'v-ltr', glyph: 'A\nB' }, // stacked top-to-bottom, A above B
+  { mode: 'h-rtl', glyph: 'BA' },   // reversed order
+  { mode: 'v-rtl', glyph: 'B\nA' }, // stacked bottom-to-top, B above A
+];
+let layoutIndex = 0;
+let layout = LAYOUT_STATES[layoutIndex].mode;
+function isVerticalLayout(){ return layout.startsWith('v'); }
+function isReversedLayout(){ return layout.endsWith('rtl'); }
+// Unicode-aware reversal (Array.from, not split('')) so emoji/CJK surrogate pairs and the
+// 🖼️ image marker survive intact instead of getting corrupted into replacement characters.
+function layoutText(text){
+  return isReversedLayout() ? Array.from(text).reverse().join('') : text;
+}
+function applyOrientation(){
+  const wm = isVerticalLayout() ? 'vertical-rl' : 'horizontal-tb';
+  const to = isVerticalLayout() ? 'upright' : 'mixed';
+  track.style.writingMode = wm; track.style.textOrientation = to;
+  previewTrack.style.writingMode = wm; previewTrack.style.textOrientation = to;
+}
+function setLayout(){
+  layoutIndex = (layoutIndex + 1) % LAYOUT_STATES.length;
+  layout = LAYOUT_STATES[layoutIndex].mode;
+  $('layoutBtn').textContent = LAYOUT_STATES[layoutIndex].glyph;
+  applyOrientation();
+  applyDefaultFontSizeIfNotManual(); // vertical stacking needs a text-length-aware size, see below
+  updatePreview();
+}
+$('layoutBtn').onclick = setLayout;
+applyOrientation();
+
+// pj87 task: "text rotation" is a SEPARATE control from character order above — user
+// feedback: "文字自己的方向...现在没有" (the text's own facing direction was still missing;
+// what existed only covered reading order). Same one-arrow-click-to-cycle UI pattern, but
+// this rotates the whole rendered text block (independent of entry direction/character order).
+const ROTATE_GLYPHS = ['→', '↓', '←', '↑']; // 0°, 90°, 180°, 270°
+let rotation = 0;
+function rotateTransformSuffix(){
+  return rotation ? ` rotate(${rotation}deg)` : '';
+}
+function setRotation(){
+  rotation = (rotation + 90) % 360;
+  $('rotateBtn').textContent = ROTATE_GLYPHS[rotation / 90];
+  updatePreview();
+  if (!display.classList.contains('hidden')) startAnimation(0);
+}
+$('rotateBtn').onclick = setRotation;
+
+$('rainbow').onchange = updatePreview;
+$('syncOffset').oninput = () => { $('offsetVal').textContent = $('syncOffset').value + 'ms'; };
+
+// req199: dropped the standalone "moving mascot" (it bounced independently of the text,
+// which the user explicitly said they don't want). Emoji/picture now insert INTO the
+// text itself — mixed in with the words, scrolling together as one piece of content.
+function insertAtCursor(textarea, insertText){
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  textarea.value = textarea.value.slice(0, start) + insertText + textarea.value.slice(end);
+  const newPos = start + insertText.length;
+  textarea.selectionStart = textarea.selectionEnd = newPos;
+  textarea.focus();
+  updatePreview();
+}
+
+const EMOJI_CHOICES = ['🐷','🐶','🐱','🐰','🦊','🐻','🐼','🐨','🐸','🦁','🐵','🦄','🤖','👻','🎃','⭐','🎈','🚀','💃','🏃'];
+const emojiPicker = $('emojiPicker');
+EMOJI_CHOICES.forEach(e => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = e;
+  b.onclick = () => insertAtCursor($('txt'), e);
+  emojiPicker.appendChild(b);
+});
+
+// A picture can't literally live inside a plain <textarea>, so we insert a marker
+// character (🖼️) at the cursor and, only when a picture has actually been uploaded,
+// swap every occurrence of that marker for the real <img> at render time — see
+// renderMixedContent() below. Typing/pasting a plain 🖼️ yourself without uploading
+// anything just stays as that emoji (no image to swap in), which is a harmless fallback.
+const IMG_MARKER = '🖼️';
+let mascotImageDataUrl = null;
+$('mascotImageFile').addEventListener('change', () => {
+  const file = $('mascotImageFile').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    mascotImageDataUrl = reader.result;
+    $('mascotImageStatus').style.display = 'block';
+    insertAtCursor($('txt'), IMG_MARKER);
+  };
+  reader.readAsDataURL(file);
+});
+$('mascotImageClear').addEventListener('click', (e) => {
+  e.preventDefault();
+  mascotImageDataUrl = null;
+  $('mascotImageFile').value = '';
+  $('mascotImageStatus').style.display = 'none';
+  $('txt').value = $('txt').value.split(IMG_MARKER).join('');
+  updatePreview();
+});
+
+// pj87 task: "restore defaults" resets every field back to the same values the page
+// loads with, in one tap — mirrors the literal HTML defaults (textarea content, select's
+// first option, range values/attributes) rather than a separately-maintained list.
+const DEFAULTS = {
+  text: '你好 Hello',
+  font: "-apple-system, 'Segoe UI', Roboto, sans-serif",
+  speed: '5', fg: '#ffc107', bg: '#000000',
+  devIndex: '1', devTotal: '1', syncOffset: '0',
+};
+function restoreDefaults(){
+  $('txt').value = DEFAULTS.text;
+  $('font').value = DEFAULTS.font;
+  sizeManuallySet = false;
+  $('speed').value = DEFAULTS.speed; $('speed').oninput();
+  $('fg').value = DEFAULTS.fg;
+  $('bg').value = DEFAULTS.bg;
+  $('rainbow').checked = false;
+  mascotImageDataUrl = null;
+  $('mascotImageFile').value = '';
+  $('mascotImageStatus').style.display = 'none';
+  setDirection('left');
+  layoutIndex = 0; layout = LAYOUT_STATES[0].mode; $('layoutBtn').textContent = LAYOUT_STATES[0].glyph;
+  rotation = 0; $('rotateBtn').textContent = ROTATE_GLYPHS[0];
+  applyOrientation();
+  $('devIndex').value = DEFAULTS.devIndex;
+  $('devTotal').value = DEFAULTS.devTotal;
+  $('syncOffset').value = DEFAULTS.syncOffset; $('offsetVal').textContent = '0ms';
+  applyDefaultFontSizeIfNotManual();
+  updatePreview();
+  renderMultiPreviewGrid();
+}
+$('resetBtn').onclick = restoreDefaults;
+// mobile req (2026-09-23): "preview显示多个手机编号" — a numbered-boxes row so setup
+// (still manual: each phone types its own position/total, no auto-discovery yet — see
+// reply for why auto-discovery needs a separate backend/networking decision) at least
+// shows at a glance which position this phone is set to, out of how many.
+const MULTI_PREVIEW_MAX_BOXES = 24; // guard against someone typing an absurd "total"
+function renderMultiPreviewGrid(){
+  const total = Math.max(1, Math.min(9999, +$('devTotal').value || 1));
+  const idx = Math.max(1, +$('devIndex').value || 1);
+  const grid = $('multiPreviewGrid');
+  if (total > MULTI_PREVIEW_MAX_BOXES) {
+    grid.textContent = `This phone: #${idx} of ${total}`;
+    return;
+  }
+  grid.innerHTML = '';
+  for (let n = 1; n <= total; n++) {
+    const box = document.createElement('div');
+    box.className = 'phoneBox' + (n === idx ? ' me' : '');
+    box.textContent = n;
+    grid.appendChild(box);
+  }
+}
+$('devIndex').oninput = renderMultiPreviewGrid;
+$('devTotal').oninput = renderMultiPreviewGrid;
+renderMultiPreviewGrid();
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderMixedContent(el, text){
+  if (mascotImageDataUrl && text.includes(IMG_MARKER)) {
+    el.innerHTML = text.split(IMG_MARKER).map(escapeHtml).join(`<img class="track-img" src="${mascotImageDataUrl}">`);
+  } else {
+    el.textContent = text;
+  }
+}
+// mobile req (2026-09-23, round 15): "entry ↓ + rotate ↓" still leaves a visible blank
+// gap between laps even after the req305/round14 off-screen-distance fix — the corrected
+// math makes the block travel its full (now-swapped) real length while invisible, so for
+// that combo the gap is long. Fallback: repeat the message back-to-back so another copy
+// is already filling the screen while any one copy is off-screen.
+//
+// mobile req (2026-09-23, round 16) REGRESSION FIX: round 15's repeat band-aid measured
+// the off-screen travel distance (effTrackWidth/effTrackHeight below) from the ALREADY-
+// REPEATED string's scrollWidth/Height — i.e. the wait-before-first-reveal got multiplied
+// by the repeat count too, turning "a jump" into "a long wait with no result" (the exact
+// bug the user reported that round). Fix: measure the off-screen distance from a SINGLE
+// unrepeated copy, and only swap in the repeated string afterwards purely for on-screen
+// masking. This bounds the initial wait back down to one copy's length (matching
+// pre-round15 behavior) while keeping the gap masked.
+//
+// req317 REGRESSION FIX (still a real gap on real devices): round16 kept a FIXED repeat
+// count (8), which was still just a guess — for a short default text ("你好 Hello") at a
+// near-fullscreen auto font size, especially in the "entry ↓ + rotate 90°" combo (whose
+// off-screen travel distance is the *swapped*, much larger dimension — see the req305
+// comment below), 8 copies could still run out before one full cycle completes, leaving a
+// real black gap followed by a real jump when the pattern of copies restarts — exactly what
+// was reported. Fix: don't guess a count — measure how much on-screen distance one extra
+// copy actually buys (render 1 copy, then 2, and read the real difference in whichever
+// dimension actually grew — text can flow along width OR height depending on writing-mode/
+// Order/rotation, so this is measured, not assumed), then render however many copies are
+// needed to comfortably outlast the full off-screen travel distance for the CURRENT axis/
+// rotation/screen size, capped at 40 copies as a sanity ceiling (so a pathological ratio
+// can't blow up the DOM). Same idea as the round16 comment kept saying was needed but not
+// yet done ("not recomputed per-case because that requires three renders for a rare edge
+// case") — turns out real devices hit that "rare" case, so it's worth the extra renders
+// (this only runs once per Start/rotate/order click, not per animation frame).
+const PLAYBACK_REPEAT_SEP = '     ';
+const PLAYBACK_REPEAT_MAX_COPIES = 40;
+// Renders enough repeated copies of unitText (separated by PLAYBACK_REPEAT_SEP) into
+// renderEl that the total flow length safely exceeds the full off-screen travel distance
+// for the current axis/rotation and screenW/screenH — so some copy's glyphs are always
+// somewhere in view, no matter where in the cycle the translate lands. measureEl defaults
+// to renderEl, but the real (non-preview) track measures its wrapper (`track`) rather than
+// the text span it renders into (`trackText`), matching what the position math elsewhere
+// in this file treats as the scrollable box.
+// Returns {w, h} = a SINGLE copy's scrollWidth/scrollHeight (still needed by the caller for
+// the req305 perpendicular-rotation dimension swap).
+function renderRepeatedToFillCycle(renderEl, unitText, screenW, screenH, measureEl){
+  measureEl = measureEl || renderEl;
+  renderMixedContent(renderEl, unitText);
+  const oneW = measureEl.scrollWidth, oneH = measureEl.scrollHeight;
+  renderMixedContent(renderEl, unitText + PLAYBACK_REPEAT_SEP + unitText);
+  const twoW = measureEl.scrollWidth, twoH = measureEl.scrollHeight;
+  const perCopyGrowth = Math.max(twoW - oneW, twoH - oneH, 1); // whichever dimension grew is the flow axis
+  const perpendicular = rotation === 90 || rotation === 270;
+  const effW = perpendicular ? oneH : oneW, effH = perpendicular ? oneW : oneH;
+  const neededSpan = axis === 'h' ? (effW + screenW) : (effH + screenH);
+  const count = Math.min(PLAYBACK_REPEAT_MAX_COPIES, Math.max(2, Math.ceil(neededSpan / perCopyGrowth) + 2));
+  renderMixedContent(renderEl, Array(count).fill(unitText).join(PLAYBACK_REPEAT_SEP));
+  return { w: oneW, h: oneH };
+}
+
+// req199: default font size fills the screen (no manual sizing needed for the common
+// "just make it huge" case) — only stops auto-following once the user actually drags
+// the slider themselves.
+let sizeManuallySet = false;
+// pj87 task fix: in vertical stacking ("Hello" only showed "H" before) the old formula
+// sized every character at 95% of the screen height regardless of how many characters
+// there were, so a 5-character word needed 5 screen-heights and only one glyph was ever
+// in view. Divide by character count in vertical layouts so the whole word fits.
+function computeDefaultFontSize(){
+  if (isVerticalLayout()) {
+    const len = Math.max(1, Array.from(($('txt').value || ' ').trim() || ' ').length);
+    return Math.max(20, Math.round(Math.min(window.innerHeight * 0.95, (window.innerHeight * 0.8) / len)));
+  }
+  return Math.max(20, Math.round(window.innerHeight * 0.95));
+}
+function applyDefaultFontSizeIfNotManual(){
+  if (sizeManuallySet) return;
+  const v = computeDefaultFontSize();
+  if (+$('size').max < v) $('size').max = v;
+  $('size').value = v;
+  $('sizeVal').textContent = v + 'px';
+}
+
+// ── live preview: small scaled-down strip that mirrors the real display settings,
+// so changing font/size/speed/color is visible immediately without going fullscreen ──
+let previewRaf = null;
+function updatePreview(){
+  cancelAnimationFrame(previewRaf);
+  const font = $('font').value;
+  const fg = $('fg').value;
+  const bg = $('bg').value;
+  const text = $('txt').value || ' ';
+  const speed = +$('speed').value;
+  const rainbow = $('rainbow').checked;
+  // preview box is small and fixed height, so cap the displayed font size instead of
+  // using the real (up to 200px) size — otherwise most settings would just show one
+  // giant letter and the preview would look "unchanged" as you drag the slider.
+  const realSize = +$('size').value;
+  const previewSize = Math.max(12, Math.min(34, realSize * 0.22));
+
+  previewBox.style.background = bg;
+  previewTrack.style.fontFamily = font;
+  previewTrack.style.color = rainbow ? '' : fg; // rainbow uses the .rainbow class's gradient color instead
+  previewTrack.style.fontSize = previewSize + 'px';
+  previewTrack.classList.toggle('rainbow', rainbow);
+  if (axis === 'h') { previewTrack.style.top = '50%'; previewTrack.style.left = '0'; }
+  else { previewTrack.style.left = '50%'; previewTrack.style.top = '0'; }
+
+  const boxWidth = previewBox.clientWidth;
+  const boxHeight = previewBox.clientHeight;
+  // req317 fix: repeat count is now computed to actually fill the cycle, not a fixed guess
+  // — see renderRepeatedToFillCycle()'s comment above.
+  const unitSize = renderRepeatedToFillCycle(previewTrack, layoutText(text), boxWidth, boxHeight);
+  const trackWidth = unitSize.w;
+  const trackHeight = unitSize.h;
+  // req305: same perpendicular-rotation swap as the real display's startAnimation()
+  // (see the comment there) — otherwise the preview wouldn't reproduce the jump bug
+  // either, and would mislead you into thinking a rotated+vertical combo was fine.
+  const perpendicular = rotation === 90 || rotation === 270;
+  const effTrackWidth = perpendicular ? trackHeight : trackWidth;
+  const effTrackHeight = perpendicular ? trackWidth : trackHeight;
+  const pxPerSec = speed * (axis === 'h' ? 26 : 10); // scaled-down version of the real px/sec so relative speed still reads correctly
+  const start = performance.now();
+  function frame(now){
+    const elapsed = (now - start) / 1000;
+    let x = 0, y = 0;
+    if (axis === 'h') {
+      const cycle = effTrackWidth + boxWidth;
+      x = dir === 'ltr' ? -effTrackWidth + ((elapsed * pxPerSec) % cycle) : boxWidth - ((elapsed * pxPerSec) % cycle);
+      previewTrack.style.transform = `translate(${x}px, -50%)${rotateTransformSuffix()}`;
+    } else {
+      const cycle = effTrackHeight + boxHeight;
+      y = dir === 'ltr' ? -effTrackHeight + ((elapsed * pxPerSec) % cycle) : boxHeight - ((elapsed * pxPerSec) % cycle);
+      previewTrack.style.transform = `translate(-50%, ${y}px)${rotateTransformSuffix()}`;
+    }
+    previewRaf = requestAnimationFrame(frame);
+  }
+  previewRaf = requestAnimationFrame(frame);
+}
+
+$('size').oninput = () => { sizeManuallySet = true; $('sizeVal').textContent = $('size').value + 'px'; updatePreview(); };
+$('speed').oninput = () => { $('speedVal').textContent = 'x' + $('speed').value; updatePreview(); };
+$('fg').oninput = updatePreview;
+$('bg').oninput = updatePreview;
+$('font').onchange = updatePreview;
+$('txt').oninput = () => { applyDefaultFontSizeIfNotManual(); updatePreview(); }; // text length affects vertical sizing
+applyDefaultFontSizeIfNotManual();
+$('speed').oninput();
+updatePreview();
+
+let rafId = null;
+let paused = false, pausedAt = 0;
+let anim = null; // holds the running animation's parameters, so pause/resume can adjust it
+
+function startAnimation(delayMs){
+  cancelAnimationFrame(rafId);
+  paused = false;
+  const speed = +$('speed').value;            // 1-10
+  const pxPerSec = speed * 80;                 // tune: x5 ≈ 400px/s
+  const baseFontSize = +$('size').value;
+  const devTotal = Math.max(1, +$('devTotal').value || 1);
+  // req192: with multiple phones, scale the rendered font up by the phone count so one
+  // giant character spans across all of them together (each phone only shows its own
+  // slice) instead of every phone separately showing its own small copy of the text.
+  const fontSize = baseFontSize * devTotal;
+  const w = window.innerWidth, h = window.innerHeight;
+  const rainbow = $('rainbow').checked;
+  const manualOffsetMs = +$('syncOffset').value || 0;
+
+  track.style.fontFamily = $('font').value;
+  track.style.fontSize = fontSize + 'px';
+  track.style.color = rainbow ? '' : $('fg').value; // rainbow uses the .rainbow class's gradient color instead
+  track.classList.toggle('rainbow', rainbow);
+  display.style.setProperty('--bg', $('bg').value);
+
+  if (axis === 'h') { track.style.top = '50%'; track.style.left = '0'; }
+  else { track.style.left = '50%'; track.style.top = '0'; }
+
+  // starting position: text begins fully off-screen on the entry edge (for the
+  // "forward" direction / classic marquee), plus this device's per-position offset
+  // so that adjacent phones show a continuous strip when synced side by side.
+  // req317 fix: repeat count is now computed to actually fill the cycle, not a fixed guess
+  // — see renderRepeatedToFillCycle()'s comment above.
+  const unitSize = renderRepeatedToFillCycle(trackText, layoutText($('txt').value || ' '), w, h, track);
+  const trackWidth = unitSize.w;
+  const trackHeight = unitSize.h;
+  // req305 real bug fix: the cycle/off-screen math below assumed the ON-SCREEN
+  // footprint of the track always matches its un-rotated layout box (trackWidth x
+  // trackHeight). That's false once "Rotate" is set to 90°/270° — CSS rotate(90deg)
+  // swaps which dimension is visually width vs height, so e.g. scrolling vertically
+  // (axis 'v') while rotated 90° actually needs to travel the *width* (not the much
+  // smaller height) before the rotated block has truly cleared the screen. Using the
+  // wrong (too small) distance made the wrap happen while the block still visually
+  // overlapped the viewport — a real, confirmed jump (user report: "箭头都向下的时候
+  // 跳一下" = vertical entry + 90° rotate, both showing a "↓" glyph). Fix: swap the
+  // two dimensions for this calculation whenever rotation is perpendicular.
+  const perpendicular = rotation === 90 || rotation === 270;
+  const effTrackWidth = perpendicular ? trackHeight : trackWidth;
+  const effTrackHeight = perpendicular ? trackWidth : trackHeight;
+  const idx = Math.max(1, +$('devIndex').value || 1) - 1; // 0-based
+  const deviceOffsetPx = idx * (axis === 'h' ? w : h); // each phone shows the "next slice"
+
+  const startTime = performance.now() + Math.max(0, (delayMs || 0) + manualOffsetMs);
+  anim = { startTime, pxPerSec, effTrackWidth, effTrackHeight, w, h, deviceOffsetPx, axis, dir };
+
+  function frame(now){
+    if (paused) { rafId = requestAnimationFrame(frame); return; }
+    const a = anim;
+    const elapsedSec = Math.max(0, (now - a.startTime) / 1000);
+    if (a.axis === 'h') {
+      const cycle = a.effTrackWidth + a.w;
+      // ltr (default) = left→right: text enters off-screen left, exits right
+      const x = a.dir === 'ltr'
+        ? -a.effTrackWidth + (((elapsedSec * a.pxPerSec) + a.deviceOffsetPx) % cycle)
+        : a.w - (((elapsedSec * a.pxPerSec) + a.deviceOffsetPx) % cycle);
+      track.style.transform = `translate(${x}px, -50%)${rotateTransformSuffix()}`;
+    } else {
+      const cycle = a.effTrackHeight + a.h;
+      // ltr (default) = top→bottom: text enters off-screen top, exits bottom
+      const y = a.dir === 'ltr'
+        ? -a.effTrackHeight + (((elapsedSec * a.pxPerSec) + a.deviceOffsetPx) % cycle)
+        : a.h - (((elapsedSec * a.pxPerSec) + a.deviceOffsetPx) % cycle);
+      track.style.transform = `translate(-50%, ${y}px)${rotateTransformSuffix()}`;
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+  rafId = requestAnimationFrame(frame);
+}
+
+function togglePause(){
+  if (!anim) return;
+  if (!paused) {
+    paused = true;
+    pausedAt = performance.now();
+  } else {
+    paused = false;
+    anim.startTime += (performance.now() - pausedAt); // shift start forward by the paused duration, so the frozen position resumes exactly
+  }
+  $('pauseBtn').textContent = paused ? '▶' : '⏸';
+}
+
+function goDisplay(delayMs){
+  settings.classList.add('hidden');
+  display.classList.remove('hidden');
+  tapHint.style.display = 'block';
+  $('exitBtn').style.display = 'flex';
+  $('pauseBtn').style.display = 'flex';
+  $('pauseBtn').textContent = '⏸';
+  startAnimation(delayMs || 0);
+}
+
+function requestFullscreenSafe(){
+  // best-effort real Fullscreen API (Edge/Chrome/Android support it well; iOS Safari
+  // largely doesn't for arbitrary elements — silently falls back to the existing
+  // fixed-inset-0 "full viewport" look, which already covers the whole screen there)
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) { req.call(el).catch(() => {}); }
+}
+function exitFullscreenSafe(){
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+    exit.call(document).catch(() => {});
+  }
+}
+
+$('startBtn').onclick = () => {
+  // req181 real-device report: fullscreen wasn't engaging on the multi-phone (>1) path.
+  // Root cause: that path used to call requestFullscreen() only after a setTimeout delay,
+  // and browsers require the Fullscreen API to be called synchronously within a user
+  // gesture (the click) — a deferred setTimeout callback no longer counts as one, so the
+  // request was silently rejected. Fix: request fullscreen HERE, synchronously in the
+  // click handler itself, regardless of whether the actual display switch is delayed.
+  requestFullscreenSafe();
+  const total = +$('devTotal').value || 1;
+  if (total > 1) {
+    // round up to the next 5-second boundary on THIS device's clock, converted
+    // to a delay from "now" — every phone that starts at roughly the same
+    // real-world moment will land on the same boundary and animate in sync.
+    const now = Date.now();
+    const boundary = Math.ceil((now + 1500) / 5000) * 5000; // +1.5s safety margin
+    const delay = boundary - now;
+    $('syncStatus').textContent = 'Starting in ' + (delay/1000).toFixed(1) + 's — start all phones within a few seconds of each other for best sync.';
+    setTimeout(() => goDisplay(0), delay);
+  } else {
+    goDisplay(0);
+  }
+};
+
+display.addEventListener('click', (e) => {
+  if (e.target.id === 'exitBtn' || e.target.id === 'pauseBtn') return; // handled separately below
+  togglePause();
+});
+
+$('pauseBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  togglePause();
+});
+
+$('exitBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  cancelAnimationFrame(rafId);
+  paused = false;
+  display.classList.add('hidden');
+  $('exitBtn').style.display = 'none';
+  $('pauseBtn').style.display = 'none';
+  settings.classList.remove('hidden');
+  exitFullscreenSafe();
+});
+
+window.addEventListener('resize', () => {
+  applyPreviewAspectRatio();
+  applyDefaultFontSizeIfNotManual();
+  if (!display.classList.contains('hidden')) startAnimation(0);
+  else updatePreview();
+});
+
+// req212: two-finger pinch on the display screen resizes the text live (the user
+// reported the previous behavior — the browser's own native page pinch-zoom kicking
+// in instead — "doesn't work well"; touch-action:none + the viewport's user-scalable=no
+// above stop that, and this handles the gesture ourselves instead).
+function touchDist(touches){
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+let pinchStartDist = null, pinchStartSize = null;
+display.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    pinchStartDist = touchDist(e.touches);
+    pinchStartSize = +$('size').value;
+  }
+}, { passive: true });
+display.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && pinchStartDist) {
+    e.preventDefault();
+    const scale = touchDist(e.touches) / pinchStartDist;
+    const max = +$('size').max;
+    const newSize = Math.max(20, Math.min(max, Math.round(pinchStartSize * scale)));
+    sizeManuallySet = true;
+    $('size').value = newSize;
+    $('sizeVal').textContent = newSize + 'px';
+    // live font-size update only (cheap) — the full startAnimation() recompute (which
+    // re-measures trackWidth/Height for the off-screen start position) happens once on
+    // touchend below, not on every touchmove frame, to keep the pinch itself smooth.
+    const devTotal = Math.max(1, +$('devTotal').value || 1);
+    track.style.fontSize = (newSize * devTotal) + 'px';
+  }
+}, { passive: false });
+display.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2 && pinchStartDist) {
+    pinchStartDist = null;
+    startAnimation(0); // re-measure at the final pinched size so the scroll math is correct
+  }
+});
+
+// req192: PWA install button + always-visible manual instructions (Android's automatic
+// prompt only fires under browser-specific conditions — e.g. a fresh session may not
+// offer it immediately — so the manual help stays visible as a reliable fallback).
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  $('installBtn').style.display = 'inline-block';
+});
+$('installBtn').onclick = async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  $('installBtn').style.display = 'none';
+};
+$('installHelpToggle').onclick = () => {
+  const el = $('installHelp');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+$('updateBtn').onclick = async () => {
+  const status = $('updateStatus');
+  status.style.display = 'block';
+  status.textContent = 'Checking for the latest version…';
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+    status.textContent = 'Cleared old version, reloading…';
+    location.reload();
+  } catch (err) {
+    status.textContent = 'Could not auto-update (' + err.message + ') — close this tab/app fully and reopen it instead.';
+  }
+};
+
+if ('serviceWorker' in navigator) {
+  // updateViaCache:'none' forces the browser to always fetch sw.js itself fresh from
+  // the network on every registration check (never reuse an HTTP-cached copy of the
+  // script) — belt-and-suspenders on top of the cache-name bump below, so a phone that
+  // visited before this update still picks up the new worker on its next open.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(()=>{});
+}
+
+// ── mobile req 2026-09-23 round16 ("plan A"): multi-phone live control over this
+// project's own WebSocket signaling server (server/server.js, deployed as
+// pj87-backend.service on the same Vultr box, proxied at /ws/). Implements the
+// recommended option from the 3-way comparison in mobile_reply.md's req46 answer #2.
+// Honest scope: text/size/speed/colors/font/rainbow/direction/layout/rotation are
+// synced; the inline picture (🖼️ marker / mascotImageDataUrl) is NOT sent over the
+// wire — a display phone that receives text containing the image marker but never
+// picked its own image will just show the plain marker text, not the picture. Rooms
+// are in-memory only on the server (gone on restart) and have no auth beyond the
+// 4-digit code — fine for "a few phones on the same table", not a general broadcast
+// system. Fullscreen on the display side is best-effort only: the "start" message
+// arrives async (not inside a user click), so browsers that require a fresh user
+// gesture for the real Fullscreen API may silently ignore the request there — the
+// existing fixed-inset-0 "full viewport" look still covers the whole screen either way.
+let liveWs = null;
+let liveRoom = null;
+let liveClockOffset = 0; // serverTime ≈ Date.now() + liveClockOffset
+
+function liveWsUrl(){
+  return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/';
+}
+
+// Best-of-N ping/pong RTT sampling to estimate this phone's clock offset from the
+// server's clock, so "start at server time T" can be converted into "start after N ms
+// on my own clock" — this is what makes the sync tighter than the manual guess-based
+// fallback above (every phone times off the SAME clock instead of its own).
+function liveCalibrateClock(ws, samples){
+  samples = samples || 5;
+  let best = null, done = 0;
+  return new Promise((resolve) => {
+    function onMsg(ev){
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.type !== 'pong') return;
+      const rtt = Date.now() - m.t;
+      const offset = m.serverTime - (m.t + rtt / 2);
+      if (best === null || rtt < best.rtt) best = { rtt, offset };
+      done++;
+      if (done >= samples) { ws.removeEventListener('message', onMsg); resolve(best.offset); }
+      else ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
+    }
+    ws.addEventListener('message', onMsg);
+    ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
+  });
+}
+
+function gatherLiveSettings(){
+  const dirKey = Object.keys(DIR_BUTTONS).find(k => DIR_BUTTONS[k].axis === axis && DIR_BUTTONS[k].dir === dir) || 'left';
+  return {
+    txt: $('txt').value || ' ',
+    size: +$('size').value,
+    speed: +$('speed').value,
+    fg: $('fg').value,
+    bg: $('bg').value,
+    font: $('font').value,
+    rainbow: $('rainbow').checked,
+    dirKey,
+    layout,
+    rotation,
+  };
+}
+
+function setLayoutMode(mode){
+  const idx = LAYOUT_STATES.findIndex(s => s.mode === mode);
+  if (idx < 0) return;
+  layoutIndex = idx; layout = mode;
+  $('layoutBtn').textContent = LAYOUT_STATES[idx].glyph;
+  applyOrientation();
+  applyDefaultFontSizeIfNotManual();
+}
+
+function setRotationDeg(deg){
+  rotation = (((Math.round(deg / 90) * 90) % 360) + 360) % 360;
+  $('rotateBtn').textContent = ROTATE_GLYPHS[rotation / 90];
+}
+
+function applyLiveSettings(s){
+  $('txt').value = s.txt;
+  sizeManuallySet = true;
+  $('size').value = s.size; $('sizeVal').textContent = s.size + 'px';
+  $('speed').value = s.speed; $('speedVal').textContent = 'x' + s.speed;
+  $('fg').value = s.fg; $('bg').value = s.bg;
+  if ([...$('font').options].some(o => o.value === s.font)) $('font').value = s.font;
+  $('rainbow').checked = s.rainbow;
+  setDirection(s.dirKey);
+  setLayoutMode(s.layout);
+  setRotationDeg(s.rotation);
+  updatePreview();
+}
+
+// ── Controller ──
+$('liveBecomeControlBtn').onclick = () => {
+  $('liveJoinDisplayBtn').disabled = true;
+  $('liveBecomeControlBtn').disabled = true;
+  $('liveControlPanel').style.display = 'block';
+  $('liveControlStatus').textContent = 'Connecting…';
+  const ws = new WebSocket(liveWsUrl());
+  liveWs = ws;
+  ws.onopen = async () => {
+    liveClockOffset = await liveCalibrateClock(ws);
+    ws.send(JSON.stringify({ type: 'create_room' }));
+  };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === 'room_created') {
+      liveRoom = m.room;
+      $('liveRoomCode').textContent = m.room;
+      $('liveControlStatus').textContent = 'Waiting for phones to join…';
+    } else if (m.type === 'devices') {
+      $('liveControlStatus').textContent = m.total + ' phone(s) connected.';
+      const grid = $('liveDeviceGrid');
+      grid.innerHTML = '';
+      m.devices.forEach(d => {
+        const box = document.createElement('div');
+        box.textContent = d.index;
+        box.style.cssText = 'width:34px;height:34px;border-radius:7px;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;';
+        grid.appendChild(box);
+      });
+    }
+  };
+  ws.onerror = ws.onclose = () => { $('liveControlStatus').textContent = 'Disconnected — reload the page and tap "Become Controller" again to retry.'; };
+};
+
+$('livePushStartBtn').onclick = () => {
+  if (!liveWs || liveWs.readyState !== WebSocket.OPEN || !liveRoom) return;
+  const LEAD_MS = 3000; // gives every display time to receive + render before the start moment
+  liveWs.send(JSON.stringify({ type: 'configure', settings: gatherLiveSettings() }));
+  const atServerTime = Date.now() + liveClockOffset + LEAD_MS;
+  liveWs.send(JSON.stringify({ type: 'start', atServerTime }));
+  $('liveControlStatus').textContent = 'Sent — displays will start together in ~' + (LEAD_MS / 1000) + 's.';
+};
+
+// ── Display ──
+$('liveJoinDisplayBtn').onclick = () => {
+  $('liveBecomeControlBtn').disabled = true;
+  $('liveJoinDisplayBtn').disabled = true;
+  $('liveDisplayPanel').style.display = 'block';
+};
+$('liveJoinSubmitBtn').onclick = () => {
+  const room = ($('liveRoomInput').value || '').trim();
+  if (!/^\d{4}$/.test(room)) { $('liveDisplayStatus').textContent = 'Enter the 4-digit code shown on the Controller phone.'; return; }
+  $('liveDisplayStatus').textContent = 'Connecting…';
+  const ws = new WebSocket(liveWsUrl());
+  liveWs = ws;
+  ws.onopen = async () => {
+    liveClockOffset = await liveCalibrateClock(ws);
+    ws.send(JSON.stringify({ type: 'join', room, role: 'display' }));
+  };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === 'join_error') {
+      $('liveDisplayStatus').textContent = 'Room not found — check the code and try again.';
+    } else if (m.type === 'joined') {
+      $('devIndex').value = m.index; $('devTotal').value = m.total; renderMultiPreviewGrid();
+      $('liveDisplayStatus').textContent = 'Connected as #' + m.index + ' of ' + m.total + ' — waiting for the Controller…';
+    } else if (m.type === 'configure') {
+      applyLiveSettings(m.settings);
+    } else if (m.type === 'start') {
+      const localDelay = Math.max(0, (m.atServerTime - liveClockOffset) - Date.now());
+      $('liveDisplayStatus').textContent = 'Starting…';
+      requestFullscreenSafe();
+      goDisplay(localDelay);
+    } else if (m.type === 'controller_left') {
+      $('liveDisplayStatus').textContent = 'Controller disconnected.';
+    }
+  };
+  ws.onerror = ws.onclose = () => { $('liveDisplayStatus').textContent = 'Disconnected — tap Join again to retry.'; };
+};
+$('liveInfoToggle').onclick = () => {
+  const el = $('liveInfo');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+</script>
+</body>
+</html>

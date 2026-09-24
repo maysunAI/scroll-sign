@@ -1,0 +1,10 @@
+{
+  "name": "pj87-signal-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PJ87 Scroll Sign — WebSocket signaling server for multi-phone live control (round 16, plan A).",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
