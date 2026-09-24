@@ -220,10 +220,10 @@
   <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
 
   <div id="infoPanel" class="card" style="display:none;">
-    <p class="sub" style="margin:0 0 6px;">build v18 &nbsp;
+    <p class="sub" style="margin:0 0 6px;">build v19 &nbsp;
       <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
     <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
-    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v18" above, you're on
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v19" above, you're on
       an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
       link in a Private/Incognito tab (that never has an old cached version installed).</p>
   </div>
@@ -684,61 +684,13 @@ function renderMixedContent(el, text){
     el.textContent = text;
   }
 }
-// mobile req (2026-09-23, round 15): "entry ↓ + rotate ↓" still leaves a visible blank
-// gap between laps even after the req305/round14 off-screen-distance fix — the corrected
-// math makes the block travel its full (now-swapped) real length while invisible, so for
-// that combo the gap is long. Fallback: repeat the message back-to-back so another copy
-// is already filling the screen while any one copy is off-screen.
-//
-// mobile req (2026-09-23, round 16) REGRESSION FIX: round 15's repeat band-aid measured
-// the off-screen travel distance (effTrackWidth/effTrackHeight below) from the ALREADY-
-// REPEATED string's scrollWidth/Height — i.e. the wait-before-first-reveal got multiplied
-// by the repeat count too, turning "a jump" into "a long wait with no result" (the exact
-// bug the user reported that round). Fix: measure the off-screen distance from a SINGLE
-// unrepeated copy, and only swap in the repeated string afterwards purely for on-screen
-// masking. This bounds the initial wait back down to one copy's length (matching
-// pre-round15 behavior) while keeping the gap masked.
-//
-// req317 REGRESSION FIX (still a real gap on real devices): round16 kept a FIXED repeat
-// count (8), which was still just a guess — for a short default text ("你好 Hello") at a
-// near-fullscreen auto font size, especially in the "entry ↓ + rotate 90°" combo (whose
-// off-screen travel distance is the *swapped*, much larger dimension — see the req305
-// comment below), 8 copies could still run out before one full cycle completes, leaving a
-// real black gap followed by a real jump when the pattern of copies restarts — exactly what
-// was reported. Fix: don't guess a count — measure how much on-screen distance one extra
-// copy actually buys (render 1 copy, then 2, and read the real difference in whichever
-// dimension actually grew — text can flow along width OR height depending on writing-mode/
-// Order/rotation, so this is measured, not assumed), then render however many copies are
-// needed to comfortably outlast the full off-screen travel distance for the CURRENT axis/
-// rotation/screen size, capped at 40 copies as a sanity ceiling (so a pathological ratio
-// can't blow up the DOM). Same idea as the round16 comment kept saying was needed but not
-// yet done ("not recomputed per-case because that requires three renders for a rare edge
-// case") — turns out real devices hit that "rare" case, so it's worth the extra renders
-// (this only runs once per Start/rotate/order click, not per animation frame).
-const PLAYBACK_REPEAT_SEP = '     ';
-const PLAYBACK_REPEAT_MAX_COPIES = 40;
-// Renders enough repeated copies of unitText (separated by PLAYBACK_REPEAT_SEP) into
-// renderEl that the total flow length safely exceeds the full off-screen travel distance
-// for the current axis/rotation and screenW/screenH — so some copy's glyphs are always
-// somewhere in view, no matter where in the cycle the translate lands. measureEl defaults
-// to renderEl, but the real (non-preview) track measures its wrapper (`track`) rather than
-// the text span it renders into (`trackText`), matching what the position math elsewhere
-// in this file treats as the scrollable box.
-// Returns {w, h} = a SINGLE copy's scrollWidth/scrollHeight (still needed by the caller for
-// the req305 perpendicular-rotation dimension swap).
-function renderRepeatedToFillCycle(renderEl, unitText, screenW, screenH, measureEl){
+// mobile req (2026-09-24): the earlier auto-repeat-copies mechanism (rounds 15-18) was
+// removed on request — the message is rendered ONCE. Returns {w, h} = that single copy's
+// scrollWidth/scrollHeight (used by the caller for the req305 perpendicular-rotation swap).
+function renderSingleCopy(renderEl, unitText, measureEl){
   measureEl = measureEl || renderEl;
   renderMixedContent(renderEl, unitText);
-  const oneW = measureEl.scrollWidth, oneH = measureEl.scrollHeight;
-  renderMixedContent(renderEl, unitText + PLAYBACK_REPEAT_SEP + unitText);
-  const twoW = measureEl.scrollWidth, twoH = measureEl.scrollHeight;
-  const perCopyGrowth = Math.max(twoW - oneW, twoH - oneH, 1); // whichever dimension grew is the flow axis
-  const perpendicular = rotation === 90 || rotation === 270;
-  const effW = perpendicular ? oneH : oneW, effH = perpendicular ? oneW : oneH;
-  const neededSpan = axis === 'h' ? (effW + screenW) : (effH + screenH);
-  const count = Math.min(PLAYBACK_REPEAT_MAX_COPIES, Math.max(2, Math.ceil(neededSpan / perCopyGrowth) + 2));
-  renderMixedContent(renderEl, Array(count).fill(unitText).join(PLAYBACK_REPEAT_SEP));
-  return { w: oneW, h: oneH };
+  return { w: measureEl.scrollWidth, h: measureEl.scrollHeight };
 }
 
 // req199: default font size fills the screen (no manual sizing needed for the common
@@ -791,9 +743,7 @@ function updatePreview(){
 
   const boxWidth = previewBox.clientWidth;
   const boxHeight = previewBox.clientHeight;
-  // req317 fix: repeat count is now computed to actually fill the cycle, not a fixed guess
-  // — see renderRepeatedToFillCycle()'s comment above.
-  const unitSize = renderRepeatedToFillCycle(previewTrack, layoutText(text), boxWidth, boxHeight);
+  const unitSize = renderSingleCopy(previewTrack, layoutText(text));
   const trackWidth = unitSize.w;
   const trackHeight = unitSize.h;
   // req305: same perpendicular-rotation swap as the real display's startAnimation()
@@ -862,9 +812,7 @@ function startAnimation(delayMs){
   // starting position: text begins fully off-screen on the entry edge (for the
   // "forward" direction / classic marquee), plus this device's per-position offset
   // so that adjacent phones show a continuous strip when synced side by side.
-  // req317 fix: repeat count is now computed to actually fill the cycle, not a fixed guess
-  // — see renderRepeatedToFillCycle()'s comment above.
-  const unitSize = renderRepeatedToFillCycle(trackText, layoutText($('txt').value || ' '), w, h, track);
+  const unitSize = renderSingleCopy(trackText, layoutText($('txt').value || ' '), track);
   const trackWidth = unitSize.w;
   const trackHeight = unitSize.h;
   // req305 real bug fix: the cycle/off-screen math below assumed the ON-SCREEN
