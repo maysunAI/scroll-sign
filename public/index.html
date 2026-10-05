@@ -117,11 +117,13 @@
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 0.8em; color: var(--sub); margin-bottom: 5px; }
   .field textarea {
-    width: 100%; min-height: 70px; background: #fafaf8; border: 1px solid var(--border);
+    width: 100%; min-height: 52px; background: #fafaf8; border: 1px solid var(--border);
     border-radius: 8px; color: var(--text); font-size: 0.95em; padding: 9px 10px; resize: vertical;
   }
   .row { display: flex; gap: 12px; }
-  .row .field { flex: 1; }
+  .row .field { flex: 1; min-width: 0; }
+  .row.compact .field:first-child { flex: 1.4; }
+  .row.compact { margin-bottom: 0; }
   input[type="range"] { width: 100%; accent-color: var(--accent); }
   input[type="color"] {
     width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 7px;
@@ -238,10 +240,10 @@
   <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
 
   <div id="infoPanel" class="card" style="display:none;">
-    <p class="sub" style="margin:0 0 6px;">build v22 &nbsp;
+    <p class="sub" style="margin:0 0 6px;">build v23 &nbsp;
       <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
     <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
-    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v22" above, you're on
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v23" above, you're on
       an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
       link in a Private/Incognito tab (that never has an old cached version installed).</p>
   </div>
@@ -304,15 +306,25 @@
       </p>
     </div>
 
-    <div class="field">
-      <label>Font</label>
-      <select id="font">
-        <option value="-apple-system, 'Segoe UI', Roboto, sans-serif">Default (sans-serif)</option>
-        <option value="Georgia, 'Times New Roman', serif">Serif</option>
-        <option value="'Courier New', Consolas, monospace">Monospace</option>
-        <option value="Impact, 'Arial Narrow', sans-serif">Condensed / bold sign</option>
-        <option value="'Comic Sans MS', cursive">Casual</option>
-      </select>
+    <div class="row compact">
+      <div class="field">
+        <label>Font</label>
+        <select id="font">
+          <option value="-apple-system, 'Segoe UI', Roboto, sans-serif">Default</option>
+          <option value="Georgia, 'Times New Roman', serif">Serif</option>
+          <option value="'Courier New', Consolas, monospace">Monospace</option>
+          <option value="Impact, 'Arial Narrow', sans-serif">Bold sign</option>
+          <option value="'Comic Sans MS', cursive">Casual</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Text color</label>
+        <input type="color" id="fg" value="#ffc107">
+      </div>
+      <div class="field">
+        <label>Background</label>
+        <input type="color" id="bg" value="#000000">
+      </div>
     </div>
 
     <div class="row">
@@ -323,17 +335,6 @@
       <div class="field">
         <label>Speed <span class="value-tag" id="speedVal"></span></label>
         <input type="range" id="speed" min="1" max="10" value="5">
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="field">
-        <label>Text color</label>
-        <input type="color" id="fg" value="#ffc107">
-      </div>
-      <div class="field">
-        <label>Background color</label>
-        <input type="color" id="bg" value="#000000">
       </div>
     </div>
 

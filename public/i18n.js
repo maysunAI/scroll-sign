@@ -29,6 +29,9 @@
   add('Picture inserted ·', '画像を挿入しました ·', '已插入图片 ·');
   add('remove picture', '画像を削除', '移除图片');
   add('Font', 'フォント', '字体');
+  add('Default', '標準', '默认');
+  add('Bold sign', '太字の看板風', '粗体招牌');
+  add('Background', '背景', '背景');
   add('Default (sans-serif)', '標準（ゴシック体）', '默认（无衬线体）');
   add('Serif', '明朝体', '衬线体');
   add('Monospace', '等幅', '等宽');

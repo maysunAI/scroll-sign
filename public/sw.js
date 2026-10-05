@@ -1,4 +1,4 @@
-const CACHE = 'scroll-sign-v22';
+const CACHE = 'scroll-sign-v23';
 const ASSETS = ['./', './index.html', './i18n.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
