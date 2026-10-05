@@ -220,10 +220,10 @@
   <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
 
   <div id="infoPanel" class="card" style="display:none;">
-    <p class="sub" style="margin:0 0 6px;">build v19 &nbsp;
+    <p class="sub" style="margin:0 0 6px;">build v20 &nbsp;
       <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
     <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
-    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v19" above, you're on
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v20" above, you're on
       an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
       link in a Private/Incognito tab (that never has an old cached version installed).</p>
   </div>
@@ -273,8 +273,8 @@
 
   <div class="card">
     <div class="field">
-      <label>Text (any language — English, 日本語, 中文, 한국어…)</label>
-      <textarea id="txt" placeholder="Type your message...">你好 Hello</textarea>
+      <label>Text (any language — English, Japanese, Chinese, Korean…)</label>
+      <textarea id="txt" placeholder="Type your message...">Hello 😀🌈</textarea>
     </div>
 
     <div class="field" style="margin-top:-6px;">
@@ -549,7 +549,7 @@ $('layoutBtn').onclick = setLayout;
 applyOrientation();
 
 // pj87 task: "text rotation" is a SEPARATE control from character order above — user
-// feedback: "文字自己的方向...现在没有" (the text's own facing direction was still missing;
+// feedback: a user report that the text's own facing direction was still missing;
 // what existed only covered reading order). Same one-arrow-click-to-cycle UI pattern, but
 // this rotates the whole rendered text block (independent of entry direction/character order).
 const ROTATE_GLYPHS = ['→', '↓', '←', '↑']; // 0°, 90°, 180°, 270°
@@ -622,7 +622,7 @@ $('mascotImageClear').addEventListener('click', (e) => {
 // loads with, in one tap — mirrors the literal HTML defaults (textarea content, select's
 // first option, range values/attributes) rather than a separately-maintained list.
 const DEFAULTS = {
-  text: '你好 Hello',
+  text: 'Hello 😀🌈',
   font: "-apple-system, 'Segoe UI', Roboto, sans-serif",
   speed: '5', fg: '#ffc107', bg: '#000000',
   devIndex: '1', devTotal: '1', syncOffset: '0',
@@ -650,7 +650,7 @@ function restoreDefaults(){
   renderMultiPreviewGrid();
 }
 $('resetBtn').onclick = restoreDefaults;
-// mobile req (2026-09-23): "preview显示多个手机编号" — a numbered-boxes row so setup
+// mobile req (2026-09-23): a request to show the numbered phones in the preview — a numbered-boxes row so setup
 // (still manual: each phone types its own position/total, no auto-discovery yet — see
 // reply for why auto-discovery needs a separate backend/networking decision) at least
 // shows at a glance which position this phone is set to, out of how many.
@@ -822,8 +822,8 @@ function startAnimation(delayMs){
   // (axis 'v') while rotated 90° actually needs to travel the *width* (not the much
   // smaller height) before the rotated block has truly cleared the screen. Using the
   // wrong (too small) distance made the wrap happen while the block still visually
-  // overlapped the viewport — a real, confirmed jump (user report: "箭头都向下的时候
-  // 跳一下" = vertical entry + 90° rotate, both showing a "↓" glyph). Fix: swap the
+  // overlapped the viewport — a real, confirmed jump (user report: "when the arrows both point down
+  // it jumps" = vertical entry + 90° rotate, both showing a "↓" glyph). Fix: swap the
   // two dimensions for this calculation whenever rotation is perpendicular.
   const perpendicular = rotation === 90 || rotation === 270;
   const effTrackWidth = perpendicular ? trackHeight : trackWidth;
@@ -1206,5 +1206,6 @@ $('liveInfoToggle').onclick = () => {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
 </script>
+<script src="i18n.js"></script>
 </body>
 </html>

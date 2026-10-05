@@ -6,6 +6,22 @@ no install, no sign-up. Turn several phones lying side by side into **one big sc
 **Live:** https://sign.maysuns.uk
 More tools: https://maysuns.uk
 
+## Screenshots
+
+| Editor | Full-screen display (landscape) |
+|---|---|
+| ![Editor](docs/screenshots/01-editor.png) | ![Display](docs/screenshots/02-display.png) |
+
+| Japanese UI | Chinese UI |
+|---|---|
+| ![Japanese](docs/screenshots/03-japanese.png) | ![Chinese](docs/screenshots/04-chinese.png) |
+
+## Languages
+
+The interface is English by default and also available in Japanese and Simplified Chinese.
+Use the language selector at the top right, or open `?lang=ja` / `?lang=zh` (the browser language is used the first time).
+All translations live in `public/i18n.js` (English text -> Japanese / Chinese); the English text in `public/index.html` is the source.
+
 ## Features
 
 - Any text (CJK / Latin / emoji mixed), adjustable size, speed, color, font, rainbow text

@@ -1,5 +1,5 @@
-const CACHE = 'scroll-sign-v17';
-const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE = 'scroll-sign-v18';
+const ASSETS = ['./', './index.html', './i18n.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
