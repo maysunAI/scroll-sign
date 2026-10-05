@@ -9,9 +9,9 @@
   add('Turn this phone into a scrolling text sign. Tap the display to come back here.', 'このスマホを電光掲示板（スクロール文字）にします。表示中に画面をタップするとここに戻ります。', '把这部手机变成滚动文字的电子显示牌。显示时点一下屏幕就能回到这里。');
   add('↺ Restore defaults', '↺ 初期設定に戻す', '↺ 恢复默认设置');
   add('ℹ️ info', 'ℹ️ 情報', 'ℹ️ 信息');
-  add('build v20', 'ビルド v20', '版本 v20');
+  add('build v21', 'ビルド v21', '版本 v21');
   add('🔄 Check for latest version', '🔄 最新バージョンを確認', '🔄 检查最新版本');
-  add('If you don\'t see "build v20" above, you\'re on an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this link in a Private/Incognito tab (that never has an old cached version installed).', '上に「ビルド v20」と表示されない場合は、古いキャッシュを見ています。上の「最新バージョンを確認」をタップするか、確実に最新を見るために、このリンクをプライベート（シークレット）タブで開いてください（古いバージョンが残っていません）。', '如果上面没有显示“版本 v20”，说明你看到的是旧的缓存版本——请点上面的“检查最新版本”，或者用隐私（无痕）标签页打开这个链接，保证看到最新的（无痕页不会保留旧版本）。');
+  add('If you don\'t see "build v21" above, you\'re on an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this link in a Private/Incognito tab (that never has an old cached version installed).', '上に「ビルド v21」と表示されない場合は、古いキャッシュを見ています。上の「最新バージョンを確認」をタップするか、確実に最新を見るために、このリンクをプライベート（シークレット）タブで開いてください（古いバージョンが残っていません）。', '如果上面没有显示“版本 v21”，说明你看到的是旧的缓存版本——请点上面的“检查最新版本”，或者用隐私（无痕）标签页打开这个链接，保证看到最新的（无痕页不会保留旧版本）。');
   add('Preview', 'プレビュー', '预览');
   add('Entry', '入る向き', '进入方向');
   add('Rotate', '文字の回転', '文字旋转');
@@ -20,7 +20,10 @@
   add('— pick the edge your text enters from (arrow points the way it travels). Defaults to entering from the left, travelling right — the most common way to use this as a sign.', '— 文字が入ってくる辺を選びます（矢印は進む向き）。初期値は左から入って右へ進む、看板として最も一般的な向きです。', '— 选择文字从哪一边进入（箭头表示移动方向）。默认从左边进入、向右移动，这是当作显示牌最常见的用法。');
   add('— which way the text itself faces: → upright (0°) · ↓ rotated 90° · ← upside down (180°) · ↑ rotated 270°. Independent of Entry and Order — this rotates the text itself, not which way it scrolls or which order the characters read in.', '— 文字そのものの向き：→ 正立（0°）・↓ 90°回転・← 上下逆さま（180°）・↑ 270°回転。入る向きや読む順とは別です。文字自体を回転させるもので、スクロールの向きや読む順は変わりません。', '— 文字本身朝向哪里：→ 正向（0°）· ↓ 旋转 90° · ← 倒置（180°）· ↑ 旋转 270°。与进入方向和文字顺序互不影响——它只旋转文字本身，不改变滚动方向，也不改变阅读顺序。');
   add('— reading order for short text (e.g. 2 characters): AB normal order · A/B stacked top-to-bottom · BA reversed order · B/A stacked bottom-to-top, tap again to cycle back to AB. Independent of Entry — e.g. stacked characters can still travel left to right as one column.', '— 短い文字（例：2文字）の並べ方：AB 通常 ・ A/B 上から下に縦積み ・ BA 逆順 ・ B/A 下から上に縦積み。もう一度タップすると AB に戻ります。入る向きとは別なので、縦積みでも一列のまま左から右へ進めます。', '— 短文字（比如 2 个字）的排列方式：AB 正常顺序 · A/B 从上到下竖排 · BA 倒序 · B/A 从下到上竖排，再点一次回到 AB。与进入方向互不影响——比如竖排的字仍可以作为一列从左向右移动。');
-  add('Text (any language — English, Japanese, Chinese, Korean…)', 'テキスト（どの言語でも — 英語、日本語、中国語、韓国語…）', '文字（任何语言——英文、日文、中文、韩文……）');
+  add('Text (any language — English, Japanese, Chinese, Korean…)', 'テキスト（どの言語でもOK）', '文字（任何语言都可以）');
+  add('📜 Scroll Sign', '📜 スクロールサイン', '📜 滚动显示牌');
+  add('Scroll Sign', 'スクロールサイン', '滚动显示牌');
+  add('Hello 😀🌈', 'こんにちは 😀🌈', '你好 😀🌈');
   add('Type your message...', 'メッセージを入力…', '输入要显示的文字……');
   add('Emoji / picture — tap to insert into your text above (mixed in with the words, not a separate animation)', '絵文字／画像 — タップして上のテキストに挿入します（文字と一緒に並び、別のアニメーションではありません）', '表情／图片——点一下插入到上面的文字里（和文字混排在一起，不是单独的动画）');
   add('Picture inserted ·', '画像を挿入しました ·', '已插入图片 ·');
@@ -90,7 +93,7 @@
     var core = norm(s); if (!core) return null;
     var d = D[lang][core]; if (d) return d;
     var p = PAT[lang]; for (var i = 0; i < p.length; i++) { if (p[i][0].test(core)) return core.replace(p[i][0], p[i][1]); }
-    var m = core.match(/^build v(\d+)$/); if (m) return D[lang]['build v20'].replace('19', m[1]);
+    var m = core.match(/^build v(\d+)$/); if (m) return D[lang]['build v21'].replace('19', m[1]);
     return null;
   }
   var orig = new WeakMap(), done = new WeakMap();
@@ -111,16 +114,18 @@
   }
   var busy = false;
   function run() { doNode(document.body); document.documentElement.lang = lang; document.title = lang === 'ja' ? 'スクロールサイン' : lang === 'zh' ? '滚动显示牌' : 'Scroll Sign'; }
+  // Each language is its own isolated page: / = English, /ja/ = Japanese only, /zh/ = Chinese only.
+  // A locked page never shows another language (no selector, no links). ?lang=en forces English on the root page.
+  var locked = (location.pathname.match(/^\/(ja|zh)(\/|\/index\.html)?$/) || [])[1] || null;
   function pick() {
-    var q = (location.search.match(/[?&]lang=(en|ja|zh)/) || [])[1]; if (q) { try { localStorage.setItem('ss_lang', q); } catch (e) {} return q; }
-    try { var s = localStorage.getItem('ss_lang'); if (s) return s; } catch (e) {}
-    var n = (navigator.language || 'en').toLowerCase(); return n.indexOf('ja') === 0 ? 'ja' : n.indexOf('zh') === 0 ? 'zh' : 'en';
+    if (locked) { try { localStorage.setItem('ss_lang', locked); } catch (e) {} return locked; }
+    return 'en';
   }
-  function setLang(l) { lang = l; try { localStorage.setItem('ss_lang', l); } catch (e) {} run(); var sel = document.getElementById('langSel'); if (sel) sel.value = l; }
+  function setLang(l) { if (l !== 'en') { location.href = '/' + l + '/'; return; } try { localStorage.setItem('ss_lang', 'en'); } catch (e) {} location.href = '/?lang=en'; }
   function init() {
     lang = pick();
     var h = document.getElementById('infoToggle') && document.getElementById('infoToggle').parentNode;
-    if (h && !document.getElementById('langSel')) {
+    if (h && !locked && !document.getElementById('langSel')) {
       var sel = document.createElement('select'); sel.id = 'langSel'; sel.setAttribute('aria-label', 'Language'); sel.style.cssText = 'font-size:0.85em;margin-left:10px;max-width:6.2em;padding:2px';
       [['en', 'English'], ['ja', '日本語'], ['zh', '中文']].forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
       sel.value = lang; sel.onchange = function () { setLang(sel.value); }; h.appendChild(sel);

@@ -8,19 +8,21 @@ More tools: https://maysuns.uk
 
 ## Screenshots
 
-| Editor | Full-screen display (landscape) |
-|---|---|
-| ![Editor](docs/screenshots/01-editor.png) | ![Display](docs/screenshots/02-display.png) |
+**Editor**
 
-| Japanese UI | Chinese UI |
-|---|---|
-| ![Japanese](docs/screenshots/03-japanese.png) | ![Chinese](docs/screenshots/04-chinese.png) |
+![Editor](docs/screenshots/01-editor.png)
+
+**Full-screen display**
+
+![Display](docs/screenshots/02-display.png)
 
 ## Languages
 
-The interface is English by default and also available in Japanese and Simplified Chinese.
-Use the language selector at the top right, or open `?lang=ja` / `?lang=zh` (the browser language is used the first time).
+The default page (`/`) is English. Japanese and Simplified Chinese are separate, fully isolated pages at `/ja/` and `/zh/`:
+a locked page shows only its own language - no language selector and no links to the others.
+Visitors whose browser language is Japanese or Chinese are sent to their page automatically; add `?lang=en` to stay on English.
 All translations live in `public/i18n.js` (English text -> Japanese / Chinese); the English text in `public/index.html` is the source.
+Hosting note: the web server must serve `index.html` for `/ja/` and `/zh/` (see `docs/nginx-example.conf`).
 
 ## Features
 

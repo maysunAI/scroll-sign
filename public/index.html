@@ -2,12 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// Language routing (runs before first paint): the English root page sends Japanese / Chinese visitors to their own page.
+(function () {
+  try {
+    var q = (location.search.match(/[?&]lang=(en|ja|zh)/) || [])[1];
+    if (location.pathname === '/' || /^\/index\.html$/.test(location.pathname)) {
+      if (q === 'en') { localStorage.setItem('ss_lang', 'en'); return; }
+      var l = q || localStorage.getItem('ss_lang') || (navigator.language || 'en').toLowerCase().slice(0, 2);
+      if (l === 'ja' || l === 'zh') location.replace('/' + l + '/' + location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Scroll Sign</title>
 <meta name="description" content="Turn your phone into a scrolling text sign. Any size, any color, portrait or landscape.">
 <meta name="theme-color" content="#f6f5f2">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <!-- req212: iOS Safari has no real Fullscreen API for arbitrary elements — these two
      meta tags are what actually gets a chrome-less look on iPhone, but only once the
      page is added to the Home Screen and reopened from there (not from a regular
@@ -220,10 +234,10 @@
   <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
 
   <div id="infoPanel" class="card" style="display:none;">
-    <p class="sub" style="margin:0 0 6px;">build v20 &nbsp;
+    <p class="sub" style="margin:0 0 6px;">build v21 &nbsp;
       <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
     <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
-    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v20" above, you're on
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v21" above, you're on
       an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
       link in a Private/Incognito tab (that never has an old cached version installed).</p>
   </div>
@@ -628,7 +642,7 @@ const DEFAULTS = {
   devIndex: '1', devTotal: '1', syncOffset: '0',
 };
 function restoreDefaults(){
-  $('txt').value = DEFAULTS.text;
+  $('txt').value = (document.documentElement.lang !== 'en' && window.ScrollSignI18n && ScrollSignI18n.tr(DEFAULTS.text)) || DEFAULTS.text;
   $('font').value = DEFAULTS.font;
   sizeManuallySet = false;
   $('speed').value = DEFAULTS.speed; $('speed').oninput();
@@ -1031,7 +1045,7 @@ if ('serviceWorker' in navigator) {
   // the network on every registration check (never reuse an HTTP-cached copy of the
   // script) — belt-and-suspenders on top of the cache-name bump below, so a phone that
   // visited before this update still picks up the new worker on its next open.
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(()=>{});
+  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(()=>{});
 }
 
 // ── mobile req 2026-09-23 round16 ("plan A"): multi-phone live control over this
@@ -1206,6 +1220,6 @@ $('liveInfoToggle').onclick = () => {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
 </script>
-<script src="i18n.js"></script>
+<script src="/i18n.js"></script>
 </body>
 </html>
