@@ -190,7 +190,7 @@
      width+height instead, so this is just a fallback before JS runs. */
   #previewBox {
     background: #111; border-radius: 10px; overflow: hidden;
-    max-width: 100%; max-height: 200px; margin: 0 auto 4px;
+    max-width: 100%; max-height: 360px; margin: 0 auto 4px;
     display: flex; align-items: center; position: relative;
   }
   #previewTrack { position: absolute; white-space: nowrap; will-change: transform; font-weight: 700; line-height: 1; }
@@ -238,10 +238,10 @@
   <p class="sub" style="margin:2px 0 14px;">Turn this phone into a scrolling text sign. Tap the display to come back here.</p>
 
   <div id="infoPanel" class="card" style="display:none;">
-    <p class="sub" style="margin:0 0 6px;">build v21 &nbsp;
+    <p class="sub" style="margin:0 0 6px;">build v22 &nbsp;
       <span id="updateBtn" style="color:var(--accent);font-weight:700;cursor:pointer;">🔄 Check for latest version</span></p>
     <p class="sub" id="updateStatus" style="display:none;margin:0 0 6px;"></p>
-    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v21" above, you're on
+    <p class="sub" style="color:#c8102e;font-weight:600;margin:0;">If you don't see "build v22" above, you're on
       an old cached copy — tap "Check for latest version" above, or for a guaranteed-fresh look, open this
       link in a Private/Incognito tab (that never has an old cached version installed).</p>
   </div>
@@ -487,12 +487,14 @@ $('infoToggle').onclick = () => {
 // (a manual "contain fit" of the live viewport shape into the available card width and
 // a max height budget) and set both directly, so the rendered box is truly the right
 // shape instead of just having the right aspect-ratio property ignored by the layout.
+let previewScale = 0.25;
 function applyPreviewAspectRatio(){
   const w = window.innerWidth, h = window.innerHeight;
   if (w <= 0 || h <= 0) return;
-  const maxBoxHeight = 200; // keep in sync with #previewBox's CSS max-height
+  const maxBoxHeight = Math.max(200, Math.min(360, Math.round(h * 0.45))); // req511: bigger on PC; keep <= #previewBox CSS max-height
   const availWidth = previewBox.parentElement.clientWidth;
   const scale = Math.min(availWidth / w, maxBoxHeight / h);
+  previewScale = scale; // req511: preview is a true miniature of the real display (same text, size and speed ratio)
   previewBox.style.width = Math.round(w * scale) + 'px';
   previewBox.style.height = Math.round(h * scale) + 'px';
 }
@@ -749,7 +751,8 @@ function updatePreview(){
   // using the real (up to 200px) size — otherwise most settings would just show one
   // giant letter and the preview would look "unchanged" as you drag the slider.
   const realSize = +$('size').value;
-  const previewSize = Math.max(12, Math.min(34, realSize * 0.22));
+  // req511: true miniature - font = real font (x phone count) x the same scale as the box, so the preview shows what playback will show.
+  const previewSize = Math.max(4, realSize * Math.max(1, +$('devTotal').value || 1) * previewScale);
 
   previewBox.style.background = bg;
   previewTrack.style.fontFamily = font;
@@ -770,7 +773,7 @@ function updatePreview(){
   const perpendicular = rotation === 90 || rotation === 270;
   const effTrackWidth = perpendicular ? trackHeight : trackWidth;
   const effTrackHeight = perpendicular ? trackWidth : trackHeight;
-  const pxPerSec = speed * (axis === 'h' ? 26 : 10); // scaled-down version of the real px/sec so relative speed still reads correctly
+  const pxPerSec = speed * 80 * previewScale; // req511: real px/sec (speed*80) x the same scale as the box
   const start = performance.now();
   function frame(now){
     const elapsed = (now - start) / 1000;

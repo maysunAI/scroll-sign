@@ -114,22 +114,17 @@
   }
   var busy = false;
   function run() { doNode(document.body); document.documentElement.lang = lang; document.title = lang === 'ja' ? 'スクロールサイン' : lang === 'zh' ? '滚动显示牌' : 'Scroll Sign'; }
-  // Each language is its own isolated page: / = English, /ja/ = Japanese only, /zh/ = Chinese only.
+  // Each language is its own isolated page: / and /en/ = English, /ja/ = Japanese only, /zh/ = Chinese only.
   // A locked page never shows another language (no selector, no links). ?lang=en forces English on the root page.
-  var locked = (location.pathname.match(/^\/(ja|zh)(\/|\/index\.html)?$/) || [])[1] || null;
+  var locked = (location.pathname.match(/^\/(en|ja|zh)(\/|\/index\.html)?$/) || [])[1] || null;
   function pick() {
     if (locked) { try { localStorage.setItem('ss_lang', locked); } catch (e) {} return locked; }
     return 'en';
   }
-  function setLang(l) { if (l !== 'en') { location.href = '/' + l + '/'; return; } try { localStorage.setItem('ss_lang', 'en'); } catch (e) {} location.href = '/?lang=en'; }
+  function setLang(l) { if (l !== 'en') { location.href = '/' + l + '/'; return; } try { localStorage.setItem('ss_lang', 'en'); } catch (e) {} location.href = "/en/"; }
   function init() {
     lang = pick();
-    var h = document.getElementById('infoToggle') && document.getElementById('infoToggle').parentNode;
-    if (h && !locked && !document.getElementById('langSel')) {
-      var sel = document.createElement('select'); sel.id = 'langSel'; sel.setAttribute('aria-label', 'Language'); sel.style.cssText = 'font-size:0.85em;margin-left:10px;max-width:6.2em;padding:2px';
-      [['en', 'English'], ['ja', '日本語'], ['zh', '中文']].forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
-      sel.value = lang; sel.onchange = function () { setLang(sel.value); }; h.appendChild(sel);
-    }
+    // (req511) no language selector on any page: each language is its own URL (/en/ /ja/ /zh/).
     var h1 = document.querySelector('#settings h1'); if (h1) h1.style.whiteSpace = 'nowrap';
     run();
     new MutationObserver(function (muts) { if (lang === 'en') return; muts.forEach(function (m) { if (m.type === 'characterData') doNode(m.target); else m.addedNodes.forEach(doNode); }); }).observe(document.body, { childList: true, subtree: true, characterData: true });
